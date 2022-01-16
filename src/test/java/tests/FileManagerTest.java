@@ -1,4 +1,7 @@
-import org.acdap.osusynchro.FileManager;
+package tests;
+
+import org.acdap.osusynchro.util.Beatmap;
+import org.acdap.osusynchro.util.FileManager;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -9,13 +12,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.acdap.osusynchro.FileManager.Beatmap;
 
 class FileManagerTest {
 
     @Test
     void getAllBeatmaps() {
-        Path testDir = Paths.get("./src/test/java/testsongs");
+        Path testDir = Paths.get("./src/test/testsongs");
         ArrayList<Beatmap> exp = new ArrayList<>(Arrays.asList(
                 new Beatmap(22374, "name - map"),
                 new Beatmap(33119, "subdirectory"),
@@ -24,7 +26,9 @@ class FileManagerTest {
                 new Beatmap(43701, "duplicate - name")
         ));
 
-        assertArrayListEquals(exp, FileManager.getAllBeatmaps(testDir));
+        ArrayList<Beatmap> res = FileManager.getAllBeatmaps(testDir);
+        assertNotNull(res);
+        TestUtils.assertArrayListEquals(exp, res);
     }
 
     @Test
@@ -46,7 +50,7 @@ class FileManagerTest {
         ));
         ArrayList<Beatmap> exp = new ArrayList<>();
 
-        assertArrayListEquals(exp, FileManager.getMissingLocal(l, r));
+        TestUtils.assertArrayListEquals(exp, FileManager.getMissingLocal(l, r));
 
         // Missing from local
         l = new ArrayList<>(Arrays.asList(
@@ -67,7 +71,7 @@ class FileManagerTest {
                 new Beatmap(33842, "duplicate - name")
         ));
 
-        assertArrayListEquals(exp, FileManager.getMissingLocal(l, r));
+        TestUtils.assertArrayListEquals(exp, FileManager.getMissingLocal(l, r));
 
         // Missing from remote
         l = new ArrayList<>(Arrays.asList(
@@ -84,13 +88,13 @@ class FileManagerTest {
         ));
         exp = new ArrayList<>();
 
-        assertArrayListEquals(exp, FileManager.getMissingLocal(l, r));
+        TestUtils.assertArrayListEquals(exp, FileManager.getMissingLocal(l, r));
 
     }
 
     @Test
     void zipBeatmaps() throws IOException {
-        Path testDir = Paths.get("./src/test/java/testsongs");
+        Path testDir = Paths.get("./src/test/testsongs");
         ArrayList<Beatmap> zipIds = new ArrayList<>(Arrays.asList(
                 new Beatmap(33119, "subdirectory"),
                 new Beatmap(33842, "duplicate - name"),
@@ -100,12 +104,5 @@ class FileManagerTest {
         Path zipPath = FileManager.zipBeatmaps(testDir, zipIds);
         assertTrue(Files.exists(zipPath));
         assertTrue(Files.size(zipPath) > 0);
-    }
-
-    private <T> void assertArrayListEquals(ArrayList<T> a, ArrayList<T> b) {
-        assertEquals(a.size(), b.size(), "Arraylist sizes are different.");
-        for (int i = 0; i < a.size(); i++) {
-            assertEquals(a.get(i), b.get(i), "Element " + i + " differs.");
-        }
     }
 }
