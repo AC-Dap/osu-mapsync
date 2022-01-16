@@ -1,4 +1,4 @@
-package org.acdap.osusynchro;
+package org.acdap.osusynchro.util;
 
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -26,13 +26,6 @@ public class FileManager {
         }
     }
 
-    public record Beatmap(int id, String name) implements Comparable<Beatmap> {
-        @Override
-        public int compareTo(Beatmap o) {
-            return id - o.id;
-        }
-    }
-
     /**
      * Returns a list of all the beatmaps, sorted by id, found in the given map directory.
      * Assumes all the map folder names have the format "<b>numerical-id</b> <i>map-name</i>".
@@ -52,7 +45,7 @@ public class FileManager {
                 bms.add(new Beatmap(id, mapName));
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            return null;
         }
 
         bms.sort(Comparator.naturalOrder());
@@ -116,7 +109,7 @@ public class FileManager {
             };
 
             for(Beatmap bm : bms){
-                String folder = bm.id + " " + bm.name;
+                String folder = bm.id() + " " + bm.name();
                 Path p = rootDir.resolve(folder);
                 Files.walkFileTree(p, fv);
                 System.out.println("Added " + bm);

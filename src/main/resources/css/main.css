@@ -1,0 +1,17 @@
+#root {
+    -fx-padding: 0 2 0 2;
+    -fx-spacing: 2;
+}
+
+.map-btn-ignore{
+    -fx-background-color: lightgrey;
+}
+
+.map-list-root{
+    -fx-padding: 0;
+}
+
+.map-list-scrollpane{
+    -fx-border-color:grey;
+    -fx-border-width:1;
+}
