@@ -13,6 +13,9 @@ import org.acdap.osusynchro.network.NetworkManager;
 import org.acdap.osusynchro.util.*;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,6 +27,7 @@ public class MainApp extends Application {
     NetworkManager network;
 
     Stage primaryStage;
+    Scene primaryScene;
 
     @Override
     public void start(Stage stage){
@@ -36,21 +40,48 @@ public class MainApp extends Application {
         localSource = new LocalBeatmapSource();
         remoteSource = new RemoteBeatmapSource();
 
-        network = new NetworkManager(localSource, remoteSource);
+        network = new NetworkManager(this, localSource, remoteSource);
         remoteSource.updateNetwork(network);
 
         Node local = getLocalUI();
         Node remote = getRemoteUI();
-        HBox root = new HBox(local, new Separator(Orientation.VERTICAL), remote);
+        HBox sourceRoot = new HBox(local, new Separator(Orientation.VERTICAL), remote);
         HBox.setHgrow(local, Priority.ALWAYS);
         HBox.setHgrow(remote, Priority.ALWAYS);
-        root.setId("root");
+        sourceRoot.setId("source-root");
 
-        Scene scene = new Scene(root);
-        scene.getStylesheets().add("css/main.css");
-        stage.setScene(scene);
+        Button syncBtn = new Button("Sync!");
+        syncBtn.setMaxWidth(Double.MAX_VALUE);
+
+        syncBtn.setOnAction(e -> {
+            synchronized (localSource.getBeatmaps()){
+                synchronized (remoteSource.getBeatmaps()){
+                    ArrayList<Beatmap> bmsToSend = FileManager.getMissingBeatmaps(localSource.getBeatmaps(), remoteSource.getBeatmaps());
+                    try {
+                        Path zip = FileManager.zipBeatmaps(Paths.get(localSource.beatmapSourcePath), bmsToSend);
+                        System.out.println("New zip created: " + zip);
+                    } catch (IOException ex) {
+                        System.out.println("Error zipping beatmaps.");
+                        ex.printStackTrace();
+                    }
+                }
+            }
+        });
+
+        VBox root = new VBox(sourceRoot, syncBtn);
+
+        primaryScene = new Scene(root);
+        primaryScene.getStylesheets().add("css/main.css");
+        stage.setScene(primaryScene);
 
         stage.show();
+    }
+
+    public boolean confirmIncomingConnection(String addr){
+        ((TextField) primaryScene.lookup("#remote-ip-field")).textProperty().set(addr);
+        System.out.println(addr);
+
+        return true;
     }
 
     private Node getLocalUI() {
@@ -77,7 +108,7 @@ public class MainApp extends Application {
 
         // Update source whenever path field changes
         filePathField.textProperty().addListener((obs, oldVal, newVal) -> {
-            localSource.updateSourcePath(newVal);
+            localSource.beatmapSourcePath = newVal;
         });
 
         VBox root = new VBox(
@@ -95,6 +126,7 @@ public class MainApp extends Application {
         Label remoteSelectLabel = new Label("Enter the IP of the remote computer to sync with:");
 
         TextField remoteField = new TextField();
+        remoteField.setId("remote-ip-field");
         Button remoteConnect = new Button("Connect");
         HBox remoteSelect = new HBox(remoteField, remoteConnect);
         HBox.setHgrow(remoteField, Priority.ALWAYS);
@@ -104,11 +136,14 @@ public class MainApp extends Application {
         // Event handling
 
         // Connect and get beatmaps from remote source when we try and connect
-        remoteConnect.setOnAction(e -> remoteSource.refreshBeatmaps());
-
-        // Update remote address whenever field changes
-        remoteField.textProperty().addListener((obs, oldVal, newVal) -> {
-            remoteSource.updateRemoteAddress(newVal);
+        remoteConnect.setOnAction(e -> {
+            String addr = remoteField.textProperty().get();
+            try{
+                network.startClientConnection(addr);
+            } catch (IOException ex) {
+                System.out.println("Invalid address " + addr);
+            }
+            remoteSource.refreshBeatmaps();
         });
 
         VBox root = new VBox(

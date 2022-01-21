@@ -2,6 +2,8 @@ package org.acdap.osusynchro.network;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import javafx.application.Platform;
+import org.acdap.osusynchro.MainApp;
 import org.acdap.osusynchro.network.NetworkProtocol.Message;
 import org.acdap.osusynchro.network.NetworkProtocol.MessageType;
 import org.acdap.osusynchro.util.Beatmap;
@@ -14,10 +16,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.lang.reflect.Type;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.SocketException;
+import java.net.*;
 import java.util.ArrayList;
 
 
@@ -67,10 +66,13 @@ public class NetworkManager {
     private final LocalBeatmapSource localSource;
     private final RemoteBeatmapSource remoteSource;
 
+    private final MainApp app;
+
     // Used for serialization/deserialization of requests
     private final Gson gson = new Gson();
 
-    public NetworkManager(LocalBeatmapSource local, RemoteBeatmapSource remote){
+    public NetworkManager(MainApp app, LocalBeatmapSource local, RemoteBeatmapSource remote){
+        this.app = app;
         this.localSource = local;
         this.remoteSource = remote;
 
@@ -144,12 +146,18 @@ public class NetworkManager {
             case LIST -> {
                 Type listType = new TypeToken<ArrayList<Beatmap>>() {}.getType();
                 ArrayList<Beatmap> beatmaps = gson.fromJson(decoded.content(), listType);
-                remoteSource.remoteUpdateBeatmaps(beatmaps);
+                // As this updates UI, have to call in separate runnable
+                Platform.runLater(() -> {
+                    remoteSource.remoteUpdateBeatmaps(beatmaps);
+                });
             }
             case IGNORE -> {
                 NetworkProtocol.MessageIgnore ignore = gson.fromJson(decoded.content(), NetworkProtocol.MessageIgnore.class);
-                // Invert as it's in relation to the sender
-                (!ignore.isLocalSource() ? localSource : remoteSource).setBeatmapIgnore(ignore.i(), ignore.ignore());
+                // As this updates UI, have to call in separate runnable
+                Platform.runLater(() -> {
+                    // Invert as it's in relation to the sender
+                    (!ignore.isLocalSource() ? localSource : remoteSource).setBeatmapIgnore(ignore.i(), ignore.ignore());
+                });
             }
             case REQUEST -> sendLocalBeatmaps();
         }
@@ -221,6 +229,15 @@ public class NetworkManager {
         }
     }
 
+    public boolean isConnected(){
+        return state == ConnectionState.CONNECTED;
+    }
+
+    /**
+     * Disconnects from the current connection, if it exists, then blocks until a
+     * successful connection to {@code remoteAddress}, or a timeout after 5 seconds.
+     * @throws IOException If the given address is invalid.
+     */
     public void startClientConnection(String remoteAddress) throws IOException {
         // Disconnect from whatever connection we currently have
         disconnect();
@@ -240,22 +257,39 @@ public class NetworkManager {
     private void serverLoop(){
         // Listen for connections on port 727
         System.out.println("Server opened on " + serverSocket.getInetAddress().getHostAddress());
+        try {
+            System.out.println("or opened on " + InetAddress.getLocalHost().getHostAddress());
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        }
         while(!serverSocket.isClosed()){
             try {
                 Socket clientSocket = serverSocket.accept();
-                // TODO: Have user verify connection first before accepting
+                Platform.runLater(() -> {
+                    boolean accept = app.confirmIncomingConnection(clientSocket.getRemoteSocketAddress().toString());
+                    if(!accept){ // Connection rejected
+                        try {
+                            clientSocket.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        return;
+                    }
 
-                // Disconnect whatever connection we currently have
-                disconnect();
+                    // Disconnect whatever connection we currently have
+                    disconnect();
 
-                synchronized (stateLock){
-                    connection = clientSocket;
+                    synchronized (stateLock){
+                        connection = clientSocket;
 
-                    listeningThread = new Thread(() -> listeningLoop());
-                    listeningThread.start();
+                        listeningThread = new Thread(() -> listeningLoop());
+                        listeningThread.start();
 
-                    state = ConnectionState.CONNECTED;
-                }
+                        state = ConnectionState.CONNECTED;
+                    }
+
+                    sendRemoteBeatmapsRequest();
+                });
             } catch(SocketException ignored){ // serverSocket closed
             } catch(IOException e) {
                 System.out.println("Error accepting connection");

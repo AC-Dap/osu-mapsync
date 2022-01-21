@@ -40,7 +40,7 @@ class NetworkManagerTest {
         when(local.getBeatmaps()).thenReturn(mockLocal);
 
         remote = mock(RemoteBeatmapSource.class);
-        network = new NetworkManager(local, remote);
+        network = new NetworkManager(null, local, remote);
     }
 
     @AfterEach

@@ -50,14 +50,13 @@ class FileManagerTest {
         ));
         ArrayList<Beatmap> exp = new ArrayList<>();
 
-        TestUtils.assertArrayListEquals(exp, FileManager.getMissingLocal(l, r));
+        TestUtils.assertArrayListEquals(exp, FileManager.getMissingBeatmaps(l, r));
 
         // Missing from local
         l = new ArrayList<>(Arrays.asList(
                 new Beatmap(33119, "subdirectory"),
                 new Beatmap(37292, "abc 123 - a)141!"),
-                new Beatmap(43701, "duplicate - name"),
-                new Beatmap(999999, "big")
+                new Beatmap(43701, "duplicate - name")
         ));
         r = new ArrayList<>(Arrays.asList(
                 new Beatmap(22374, "name - map"),
@@ -66,12 +65,9 @@ class FileManagerTest {
                 new Beatmap(37292, "abc 123 - a)141!"),
                 new Beatmap(43701, "duplicate - name")
         ));
-        exp = new ArrayList<>(Arrays.asList(
-                new Beatmap(22374, "name - map"),
-                new Beatmap(33842, "duplicate - name")
-        ));
+        exp = new ArrayList<>();
 
-        TestUtils.assertArrayListEquals(exp, FileManager.getMissingLocal(l, r));
+        TestUtils.assertArrayListEquals(exp, FileManager.getMissingBeatmaps(l, r));
 
         // Missing from remote
         l = new ArrayList<>(Arrays.asList(
@@ -86,9 +82,12 @@ class FileManagerTest {
                 new Beatmap(33119, "subdirectory"),
                 new Beatmap(37292, "abc 123 - a)141!")
         ));
-        exp = new ArrayList<>();
+        exp = new ArrayList<>(Arrays.asList(
+                new Beatmap(33842, "duplicate - name"),
+                new Beatmap(43701, "duplicate - name")
+        ));
 
-        TestUtils.assertArrayListEquals(exp, FileManager.getMissingLocal(l, r));
+        TestUtils.assertArrayListEquals(exp, FileManager.getMissingBeatmaps(l, r));
 
     }
 
@@ -104,5 +103,15 @@ class FileManagerTest {
         Path zipPath = FileManager.zipBeatmaps(testDir, zipIds);
         assertTrue(Files.exists(zipPath));
         assertTrue(Files.size(zipPath) > 0);
+    }
+
+    @Test
+    void zipOsz() {
+        Path beatmap = Paths.get("./src/test/testsongs/37292 abc 123 - a)141!");
+        Path save = Paths.get("./src/test/testsongs");
+
+        Path osz = FileManager.zipOsz(beatmap, save);
+        assertNotNull(osz);
+        assertTrue(Files.exists(osz));
     }
 }

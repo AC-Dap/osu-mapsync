@@ -8,17 +8,10 @@ import java.util.Collections;
 
 public class RemoteBeatmapSource extends BeatmapSource{
 
-    private String remoteAddress = "";
-    private String connectedAddress = "";
-
     private NetworkManager network;
 
     public void updateNetwork(NetworkManager network){
         this.network = network;
-    }
-
-    public void updateRemoteAddress(String address){
-        remoteAddress = address;
     }
 
     public void remoteUpdateBeatmaps(ArrayList<Beatmap> beatmaps){
@@ -28,15 +21,7 @@ public class RemoteBeatmapSource extends BeatmapSource{
 
     @Override
     public boolean refreshBeatmaps() {
-        if(!connectedAddress.equals(remoteAddress)){
-            connectedAddress = remoteAddress;
-            try {
-                network.startClientConnection(connectedAddress);
-            } catch (IOException e) {
-                System.out.println("Error connecting to " + connectedAddress);
-                return false;
-            }
-        }
+        if(!network.isConnected()) return false;
         network.sendRemoteBeatmapsRequest();
         return true;
     }

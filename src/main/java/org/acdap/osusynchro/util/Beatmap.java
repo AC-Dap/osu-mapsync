@@ -43,4 +43,12 @@ public class Beatmap implements Comparable<Beatmap> {
         Beatmap beatmap = (Beatmap) o;
         return id == beatmap.id && ignore == beatmap.ignore && Objects.equals(name, beatmap.name);
     }
+
+    @Override
+    public String toString() {
+        return "Beatmap{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                '}';
+    }
 }

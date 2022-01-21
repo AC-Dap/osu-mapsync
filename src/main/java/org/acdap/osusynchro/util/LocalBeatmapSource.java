@@ -6,11 +6,7 @@ import java.util.Collections;
 
 public class LocalBeatmapSource extends BeatmapSource{
 
-    private String beatmapSourcePath = "";
-
-    public void updateSourcePath(String newPath){
-        beatmapSourcePath = newPath;
-    }
+    public String beatmapSourcePath = "";
 
     @Override
     public boolean refreshBeatmaps() {
