@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io;
+use std::{io, sync, thread};
 use std::io::{BufReader, Read};
 use data_encoding::HEXUPPER;
 use sha2::{Digest, Sha256};
@@ -88,14 +88,38 @@ impl SongFolder{
     }
 }
 
-pub fn read_local_files(songs_folder: &Path) -> Result<Vec<SongFolder>, SongFolderError> {
-    let mut songs = Vec::new();
-    for entry in songs_folder.read_dir()? {
+/// Reads all the beatmap folders in the given directory.
+/// Splits the job across 4 threads to speed up operation.
+pub fn read_local_files(songs_dir: &Path) -> Result<Vec<SongFolder>, SongFolderError> {
+    // Get all the paths that we should read
+    let mut song_paths = Vec::new();
+    for entry in songs_dir.read_dir()? {
         let path = entry?.path();
-        println!("{:?}", path);
         if SongFolder::is_song_folder(&path) {
-            songs.push(SongFolder::new(path)?);
+            song_paths.push(path);
         }
+    }
+
+    // Split paths between 4 threads
+    let (sender, receiver) = sync::mpsc::channel();
+    let mut threads = Vec::new();
+    for chunk in song_paths.chunks(4) {
+        threads.push({
+            let chunk = chunk.to_owned();
+            let sender = sender.clone();
+            thread::spawn(move || {
+                for path in chunk {
+                    sender.send(SongFolder::new(path)).unwrap();
+                }
+            })
+        });
+    }
+
+    // Collect the results
+    threads.into_iter().for_each(|thread| thread.join().unwrap());
+    let mut songs = Vec::new();
+    while let Ok(song) = receiver.try_recv() {
+        songs.push(song?);
     }
     Ok(songs)
 }
