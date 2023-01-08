@@ -8,12 +8,12 @@ use regex::Regex;
 use lazy_static::lazy_static;
 use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SongFolder {
-    id: u64,
-    name: String,
-    path: PathBuf,
-    checksum: String
+    pub id: u64,
+    pub name: String,
+    pub checksum: String,
+    pub path: Option<PathBuf>,
 }
 
 #[derive(Error, Debug)]
@@ -43,7 +43,7 @@ impl SongFolder{
             id: groups[1].parse::<u64>().unwrap_or(0),
             name: groups[2].to_string(),
             checksum: SongFolder::calculate_checksum(&path)?,
-            path,
+            path: Some(path),
         })
     }
 
