@@ -1,14 +1,15 @@
 use std::fs::File;
-use std::{io, sync, thread};
-use std::io::{BufReader, Read};
+use std::io;
+use std::io::Read;
 use data_encoding::HEXUPPER;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use regex::Regex;
 use lazy_static::lazy_static;
 use thiserror::Error;
+use tokio::{sync, task};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SongFolder {
     pub id: u64,
     pub name: String,
@@ -60,10 +61,9 @@ impl SongFolder{
     }
 
     /// Calculates a checksum of the given song folder by using just the .osu files
-    /// to avoid reading too much from disk.
+    /// to avoid reading too much from disk. Will block as it reads from the file system.
     fn calculate_checksum(path: &Path) -> Result<String, SongFolderError> {
         let mut hasher = Sha256::new();
-        let mut buffer = [0; 1024];
 
         for entry in path.read_dir()? {
             let file = entry?;
@@ -73,14 +73,11 @@ impl SongFolder{
                 continue;
             }
 
-            // Add file bytes to the hasher
-            let file = File::open(file.path())?;
-            let mut reader = BufReader::new(file);
-            loop {
-                let count = reader.read(&mut buffer)?;
-                if count == 0 { break }
-                hasher.update(&buffer[..count]);
-            }
+            // Read file and update the hasher
+            let mut file = File::open(file.path())?;
+            let mut buffer = Vec::new();
+            file.read_to_end(&mut buffer)?;
+            hasher.update(buffer);
         }
 
         let digest = hasher.finalize();
@@ -90,35 +87,36 @@ impl SongFolder{
 
 /// Reads all the beatmap folders in the given directory.
 /// Splits the job across 4 threads to speed up operation.
-pub fn read_local_files(songs_dir: &Path) -> Result<Vec<SongFolder>, SongFolderError> {
+pub async fn read_local_files(songs_dir: &Path) -> Result<Vec<SongFolder>, SongFolderError> {
     // Get all the paths that we should read
     let mut song_paths = Vec::new();
-    for entry in songs_dir.read_dir()? {
-        let path = entry?.path();
+    let mut entries = tokio::fs::read_dir(songs_dir).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
         if SongFolder::is_song_folder(&path) {
             song_paths.push(path);
         }
     }
 
+    println!("Reading {} songs...", song_paths.len());
+
     // Split paths between 4 threads
-    let (sender, receiver) = sync::mpsc::channel();
-    let mut threads = Vec::new();
+    let (sender, mut receiver) = sync::mpsc::channel(100);
     for chunk in song_paths.chunks(4) {
-        threads.push({
-            let chunk = chunk.to_owned();
-            let sender = sender.clone();
-            thread::spawn(move || {
-                for path in chunk {
-                    sender.send(SongFolder::new(path)).unwrap();
-                }
-            })
+        let chunk = chunk.to_owned();
+        let sender = sender.clone();
+        task::spawn_blocking(move || {
+            for path in chunk {
+                sender.blocking_send(SongFolder::new(path)).unwrap();
+            }
         });
     }
+    // Drop main thread's reference to allow channel to close properly
+    drop(sender);
 
-    // Collect the results
-    threads.into_iter().for_each(|thread| thread.join().unwrap());
+    // Read everything in the channel, until it is closed
     let mut songs = Vec::new();
-    while let Ok(song) = receiver.try_recv() {
+    while let Some(song) = receiver.recv().await {
         songs.push(song?);
     }
     Ok(songs)
