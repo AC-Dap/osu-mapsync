@@ -8,7 +8,9 @@ use std::sync::Mutex;
 use std::time::Instant;
 use file_manager::SongFolder;
 use tauri::api::dialog::blocking::FileDialogBuilder;
+use tauri::Manager;
 
+mod networking;
 mod file_manager;
 
 #[derive(Default, serde::Serialize)]
@@ -71,12 +73,29 @@ async fn get_remote_files() -> Result<Vec<SongFolder>, String> {
     Ok(read_songs.unwrap())
 }
 
+#[tauri::command]
+async fn connect_to_server(addr: String) -> Result<bool, String> {
+    networking::connect_to_server(addr).await
+        .map_err(|err| { format!("An error occurred: {err:?} ") })
+}
+
 
 #[tokio::main]
 async fn main() {
     tauri::Builder::default()
         .manage(SynchronizerState::default())
-        .invoke_handler(tauri::generate_handler![get_local_path, read_local_files, get_remote_files])
+        .invoke_handler(tauri::generate_handler![
+            get_local_path, read_local_files, get_remote_files,
+            connect_to_server
+        ])
+        .setup(|app| {
+            let main_window = app.get_window("main").unwrap();
+
+            // Pass in the main window to our server listener for message emitting
+            networking::start_listening_server(main_window.clone());
+
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 
