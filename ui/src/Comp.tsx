@@ -2,7 +2,7 @@ import {createSignal, For} from "solid-js";
 import {invoke} from "@tauri-apps/api";
 
 export default () => {
-    const [dirPath, setDirPath] = createSignal("Please choose your osu! songs directory");
+    const [dirPath, setDirPath] = createSignal("");
     const [localSongs, setLocalSongs] = createSignal<any[]>([]);
     const [remoteSongs, setRemoteSongs] = createSignal<any[]>([]);
 
@@ -51,7 +51,7 @@ export default () => {
 
     return <div style={{display: "flex"}}>
         <div>
-            <input type={"text"} value={dirPath()} readonly style={{width: "500px"}}/>
+            <input type={"text"} placeholder={"Please choose your osu! songs directory"} value={dirPath()} readonly style={{width: "500px"}}/>
             <button onclick={chooseDir}>
                 Choose Directory
             </button>
