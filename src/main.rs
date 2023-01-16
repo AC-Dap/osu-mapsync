@@ -13,7 +13,7 @@ use tauri::Manager;
 mod networking;
 mod file_manager;
 
-#[derive(Default, serde::Serialize)]
+#[derive(Debug)]
 struct SynchronizerState {
     local_path: Mutex<Option<PathBuf>>,
     local_songs: Mutex<Vec<SongFolder>>,
