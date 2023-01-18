@@ -9,11 +9,12 @@ use lazy_static::lazy_static;
 use thiserror::Error;
 use tokio::{sync, task};
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SongFolder {
     pub id: u64,
     pub name: String,
     pub checksum: String,
+    #[serde(skip)]
     pub path: Option<PathBuf>,
 }
 
