@@ -1,13 +1,16 @@
 use std::fs::File;
 use std::io;
-use std::io::Read;
+use std::io::{Read, Seek, Write};
 use data_encoding::HEXUPPER;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use regex::Regex;
 use lazy_static::lazy_static;
+use tempfile::tempfile;
 use thiserror::Error;
 use tokio::{sync, task};
+use walkdir::WalkDir;
+use zip::write::FileOptions;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SongFolder {
@@ -121,4 +124,42 @@ pub async fn read_local_files(songs_dir: &Path) -> Result<Vec<SongFolder>, SongF
         songs.push(song?);
     }
     Ok(songs)
+}
+
+pub fn zip_local_files(songs_to_zip: Vec<&SongFolder>) -> io::Result<File> {
+    let mut zip_file = tempfile()?;
+    let mut zip = zip::ZipWriter::new(zip_file.try_clone()?);
+    let zip_options = FileOptions::default();
+
+    let mut buf = Vec::new();
+    for song in songs_to_zip {
+        // Need to remove path prefix when adding to zip
+        let prefix = &song.path.unwrap().parent().unwrap();
+
+        // Get iterator that goes over all entries in directory
+        let mut files = WalkDir::new(&song.path.unwrap())
+            .into_iter().filter_map(|e| e.ok());
+        for entry in files {
+            let path = entry.path();
+            let name = path.strip_prefix(prefix).unwrap()
+                .to_string_lossy();
+
+            if path.is_file() {
+                println!("Adding file {:?} as {:?}", path, name);
+                zip.start_file(name, zip_options)?;
+
+                let mut f = File::open(path)?;
+                f.read_to_end(&mut buf)?;
+                zip.write_all(&buf)?;
+                buf.clear();
+            } else {
+                println!("Adding dir {:?} as {:?}", path, name);
+                zip.add_directory(name, zip_options)?;
+            }
+        }
+    }
+    zip.finish()?;
+
+    zip_file.rewind()?;
+    Ok(zip_file)
 }
