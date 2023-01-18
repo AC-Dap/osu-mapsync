@@ -4,11 +4,12 @@ windows_subsystem = "windows"
 )]
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use file_manager::SongFolder;
 use tauri::api::dialog::blocking::FileDialogBuilder;
 use tauri::Manager;
+use networking::packets::PacketManager;
 
 mod networking;
 mod file_manager;
@@ -16,8 +17,20 @@ mod file_manager;
 #[derive(Debug)]
 struct SynchronizerState {
     local_path: Mutex<Option<PathBuf>>,
-    local_songs: Mutex<Vec<SongFolder>>,
-    remote_songs: Mutex<Vec<SongFolder>>
+    local_songs: Arc<Mutex<Vec<SongFolder>>>,
+    remote_songs: Arc<Mutex<Vec<SongFolder>>>,
+    packet_manager: Arc<Mutex<PacketManager>>
+}
+
+impl SynchronizerState {
+    fn new() -> Self {
+        Self {
+            local_path: Mutex::new(None),
+            local_songs: Arc::new(Mutex::new(Vec::new())),
+            remote_songs: Arc::new(Mutex::new(Vec::new())),
+            packet_manager: Arc::new(Mutex::new(PacketManager::new()))
+        }
+    }
 }
 
 #[tauri::command]
@@ -74,8 +87,8 @@ async fn get_remote_files() -> Result<Vec<SongFolder>, String> {
 }
 
 #[tauri::command]
-async fn connect_to_server(addr: String) -> Result<bool, String> {
-    networking::connect_to_server(addr).await
+async fn connect_to_server(addr: String, state: tauri::State<'_, SynchronizerState>) -> Result<bool, String> {
+    networking::connect_to_server(addr, &state.packet_manager).await
         .map_err(|err| { format!("An error occurred: {err:?} ") })
 }
 
@@ -83,16 +96,21 @@ async fn connect_to_server(addr: String) -> Result<bool, String> {
 #[tokio::main]
 async fn main() {
     tauri::Builder::default()
-        .manage(SynchronizerState::default())
+        .manage(SynchronizerState::new())
         .invoke_handler(tauri::generate_handler![
             get_local_path, read_local_files, get_remote_files,
             connect_to_server
         ])
         .setup(|app| {
+            let state = app.state::<SynchronizerState>();
             let main_window = app.get_window("main").unwrap();
 
             // Pass in the main window to our server listener for message emitting
-            networking::start_listening_server(main_window.clone());
+            networking::start_listening_server(main_window.clone(), state.packet_manager.clone());
+
+            // Let the packet manager know about our app so it can communicate with it
+            state.packet_manager.lock().unwrap()
+                .connect_to_app(state.local_songs.clone(), state.remote_songs.clone(), main_window);
 
             Ok(())
         })
