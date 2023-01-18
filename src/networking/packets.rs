@@ -21,7 +21,7 @@ pub trait Packet: Send + Sync {
     /// representation received over the socket connection.
     fn deserialize(raw_data: String) -> Self where Self:Sized;
     /// Allows recasting from dyn Packet to a specific packet
-    fn as_any(&self) -> &dyn Any;
+    fn as_any(&mut self) -> &mut dyn Any;
 }
 impl std::fmt::Debug for dyn Packet {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -50,7 +50,7 @@ impl Packet for MapListRequestPacket {
         Self {}
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 }
@@ -80,7 +80,7 @@ impl Packet for MapListPacket {
         }
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 }
@@ -110,7 +110,7 @@ impl Packet for DownloadRequestPacket {
         }
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 }
@@ -142,7 +142,7 @@ impl Packet for DownloadResponsePacket {
         Self { zip_size: raw_data.parse::<u64>().unwrap(), zipped_maps: None }
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 }
@@ -168,7 +168,7 @@ impl Packet for DisconnectPacket{
         DisconnectPacket {}
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 }
@@ -206,7 +206,7 @@ impl PacketManager {
         self.send_packet(Box::new(DisconnectPacket::new()));
 
         // Create new packet queue
-        let (sender, mut receiver) = mpsc::channel(10);
+        let (sender, receiver) = mpsc::channel(10);
         self.packet_queue = Some(sender.clone());
 
         let (read_stream, write_stream) = connection.into_split();
@@ -215,9 +215,9 @@ impl PacketManager {
     }
 
     fn start_reading_thread(&self, stream: OwnedReadHalf, packet_queue: mpsc::Sender<Box<dyn Packet>>) {
-        let local_songs = self.app_state.unwrap().local_songs.clone();
-        let remote_songs = self.app_state.unwrap().remote_songs.clone();
-        let window = self.app_state.unwrap().app_window.clone();
+        let local_songs = self.app_state.as_ref().unwrap().local_songs.clone();
+        let remote_songs = self.app_state.as_ref().unwrap().remote_songs.clone();
+        let window = self.app_state.as_ref().unwrap().app_window.clone();
 
         tokio::spawn(async move {
             let mut buf_reader = BufReader::new(stream);
@@ -255,7 +255,11 @@ impl PacketManager {
                             let local_songs = local_songs.lock().unwrap();
                             maps_requested.requested_maps.iter()
                                 .map(|song| {
-                                    local_songs.iter().find(|local_song| song.id == local_song.id && song.name == local_song.name).unwrap()
+                                    local_songs
+                                        .iter()
+                                        .find(|local_song| song.id == local_song.id && song.name == local_song.name)
+                                        .unwrap()
+                                        .clone()
                                 })
                                 .collect()
                         };
@@ -287,6 +291,9 @@ impl PacketManager {
                                     let n = file_data.read(&mut buf[..]).await.unwrap();
                                     file.write_all(&buf[..n]).await.unwrap();
                                 }
+
+                                // Once we've done, consume the Take wrapper
+                                buf_reader = file_data.into_inner();
                             }
                         }
                     },
@@ -307,12 +314,12 @@ impl PacketManager {
         });
     }
 
-    fn start_writing_thread(&self, mut stream: OwnedWriteHalf, mut packet_queue: mpsc::Receiver<Box<dyn Packet>>) {
+    fn start_writing_thread(&self, stream: OwnedWriteHalf, mut packet_queue: mpsc::Receiver<Box<dyn Packet>>) {
         tokio::spawn(async move {
             let mut buf_writer = BufWriter::new(stream);
 
             loop {
-                let packet = packet_queue.recv().await.unwrap();
+                let mut packet = packet_queue.recv().await.unwrap();
 
                 let mut buf = Vec::new();
                 write!(&mut buf, "{}\n{}\n", packet.get_header(), packet.get_data()).unwrap();
@@ -324,10 +331,10 @@ impl PacketManager {
                         println!("Download Received");
                         // Write the zip file to the stream
                         let packet = packet.as_any()
-                            .downcast_ref::<DownloadResponsePacket>().unwrap();
+                            .downcast_mut::<DownloadResponsePacket>().unwrap();
 
                         // Don't try and read the entire file into memory just in case it's large
-                        let mut zip_file = packet.zipped_maps.unwrap();
+                        let zip_file = packet.zipped_maps.as_mut().unwrap();
                         let mut buf = [0; 1024];
                         loop {
                             let n = zip_file.read(&mut buf[..]).await.unwrap();
@@ -354,9 +361,15 @@ impl PacketManager {
         });
     }
 
-    pub async fn send_packet(&self, packet: Box<dyn Packet>) {
+    /// Spawn a tokio task to eventually send our packet in the queue
+    /// Here we spawn a task to avoid making send_packet async, which would
+    /// make things annoying since every use of PacketManager will be behind a mutex
+    pub fn send_packet(&self, packet: Box<dyn Packet>) {
         if let Some(packet_queue) = &self.packet_queue {
-            packet_queue.send(packet).await.unwrap();
+            let packet_queue = packet_queue.clone();
+            tokio::spawn(async move {
+                packet_queue.send(packet).await.unwrap();
+            });
         }
     }
 }

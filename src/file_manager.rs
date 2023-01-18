@@ -126,7 +126,7 @@ pub async fn read_local_files(songs_dir: &Path) -> Result<Vec<SongFolder>, SongF
     Ok(songs)
 }
 
-pub fn zip_local_files(songs_to_zip: Vec<&SongFolder>) -> io::Result<File> {
+pub fn zip_local_files(songs_to_zip: Vec<SongFolder>) -> io::Result<File> {
     let mut zip_file = tempfile()?;
     let mut zip = zip::ZipWriter::new(zip_file.try_clone()?);
     let zip_options = FileOptions::default();
@@ -134,10 +134,11 @@ pub fn zip_local_files(songs_to_zip: Vec<&SongFolder>) -> io::Result<File> {
     let mut buf = Vec::new();
     for song in songs_to_zip {
         // Need to remove path prefix when adding to zip
-        let prefix = &song.path.unwrap().parent().unwrap();
+        let path = song.path.unwrap();
+        let prefix = path.parent().unwrap();
 
         // Get iterator that goes over all entries in directory
-        let mut files = WalkDir::new(&song.path.unwrap())
+        let files = WalkDir::new(&path)
             .into_iter().filter_map(|e| e.ok());
         for entry in files {
             let path = entry.path();
@@ -160,6 +161,7 @@ pub fn zip_local_files(songs_to_zip: Vec<&SongFolder>) -> io::Result<File> {
     }
     zip.finish()?;
 
+    // Rewind position in file to beginning to match expected behavior
     zip_file.rewind()?;
     Ok(zip_file)
 }
