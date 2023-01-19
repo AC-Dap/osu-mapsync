@@ -13,6 +13,8 @@ use networking::packets::PacketManager;
 
 mod networking;
 mod file_manager;
+#[cfg(test)]
+mod test;
 
 #[derive(Debug)]
 struct SynchronizerState {

@@ -3,7 +3,7 @@ use std::io::Write;
 use std::fmt::Formatter;
 use std::sync::{Arc, Mutex};
 use tauri::{Window, Wry};
-use tauri::api::dialog::blocking::{ask, FileDialogBuilder};
+use tauri::api::dialog::blocking::{FileDialogBuilder};
 use tokio::fs::File;
 use tokio::io;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter, sink};
@@ -11,6 +11,18 @@ use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc};
 use crate::file_manager::{SongFolder, zip_local_files};
+
+// Testing stuff
+use cfg_if::cfg_if;
+cfg_if! {
+    if #[cfg(test)] {
+        use crate::test;
+        use test::MockWindow;
+        use test::ask;
+    } else {
+        use tauri::api::dialog::blocking::ask;
+    }
+}
 
 pub trait Packet: Send + Sync {
     /// A distinct header to identify the packet type
@@ -174,11 +186,22 @@ impl Packet for DisconnectPacket{
     }
 }
 
-#[derive(Debug)]
-struct AppState {
-    local_songs: Arc<Mutex<Vec<SongFolder>>>,
-    remote_songs: Arc<Mutex<Vec<SongFolder>>>,
-    app_window: Window<Wry>
+cfg_if! {
+    if #[cfg(test)] {
+        #[derive(Debug)]
+        struct AppState {
+            local_songs: Arc<Mutex<Vec<SongFolder>>>,
+            remote_songs: Arc<Mutex<Vec<SongFolder>>>,
+            app_window: MockWindow
+        }
+    } else {
+        #[derive(Debug)]
+        struct AppState {
+            local_songs: Arc<Mutex<Vec<SongFolder>>>,
+            remote_songs: Arc<Mutex<Vec<SongFolder>>>,
+            app_window: Window<Wry>
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -193,6 +216,16 @@ impl PacketManager {
     }
 
     pub fn connect_to_app(&mut self, local_songs: Arc<Mutex<Vec<SongFolder>>>, remote_songs: Arc<Mutex<Vec<SongFolder>>>, app_window: Window<Wry>) {
+        cfg_if! {
+            if #[cfg(test)] {}
+            else {
+                self.app_state = Some(AppState{ local_songs, remote_songs, app_window });
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub fn connect_to_test(&mut self, local_songs: Arc<Mutex<Vec<SongFolder>>>, remote_songs: Arc<Mutex<Vec<SongFolder>>>, app_window: MockWindow) {
         self.app_state = Some(AppState{ local_songs, remote_songs, app_window });
     }
 

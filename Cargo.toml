@@ -21,6 +21,9 @@ tokio = { version = "1", features = ["full"] }
 zip = "0.6.3"
 walkdir = "2"
 tempfile = "3"
+cfg-if = "1.0.0"
+expect-test = "1.4.0"
+mockall = "0.11.3"
 
 
 [features]
