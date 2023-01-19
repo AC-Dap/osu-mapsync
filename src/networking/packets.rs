@@ -5,7 +5,8 @@ use std::sync::{Arc, Mutex};
 use tauri::{Window, Wry};
 use tauri::api::dialog::blocking::{ask, FileDialogBuilder};
 use tokio::fs::File;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
+use tokio::io;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter, sink};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc};
@@ -33,7 +34,7 @@ pub struct MapListRequestPacket;
 impl MapListRequestPacket {
     const HEADER: &'static str = "MapListRequestPacket";
 
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {}
     }
 }
@@ -61,7 +62,7 @@ pub struct MapListPacket {
 impl MapListPacket {
     const HEADER: &'static str = "MapListPacket";
 
-    fn new(map_list: Vec<SongFolder>) -> Self {
+    pub fn new(map_list: Vec<SongFolder>) -> Self {
         Self { map_list }
     }
 }
@@ -91,7 +92,7 @@ pub struct DownloadRequestPacket {
 impl DownloadRequestPacket {
     const HEADER: &'static str = "DownloadRequestPacket";
 
-    fn new(requested_maps: Vec<SongFolder>) -> Self {
+    pub fn new(requested_maps: Vec<SongFolder>) -> Self {
         Self { requested_maps }
     }
 }
@@ -122,7 +123,7 @@ pub struct DownloadResponsePacket {
 impl DownloadResponsePacket {
     const HEADER: &'static str = "DownloadResponsePacket";
 
-    async fn new(zipped_maps: File) -> Self {
+    pub async fn new(zipped_maps: File) -> Self {
         Self {
             zip_size: zipped_maps.metadata().await.unwrap().len(),
             zipped_maps: Some(zipped_maps)
@@ -151,7 +152,7 @@ pub struct DisconnectPacket;
 impl DisconnectPacket {
     const HEADER: &'static str = "DisconnectPacket";
 
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {}
     }
 }
@@ -223,18 +224,22 @@ impl PacketManager {
             let mut buf_reader = BufReader::new(stream);
 
             loop {
+                // Since read_line includes the newline at the end, we need to pop the last
+                // character off each time
                 let mut packet_header = String::new();
                 buf_reader.read_line(&mut packet_header).await.unwrap();
+                packet_header.pop();
 
                 let mut raw_data = String::new();
                 buf_reader.read_line(&mut raw_data).await.unwrap();
+                raw_data.pop();
 
                 match packet_header.as_str() {
                     MapListRequestPacket::HEADER => {
                         println!("Map List Requested");
                         // Send back packet of currently loaded local songs
                         let local_songs = local_songs.lock().unwrap().clone();
-                        let _ = packet_queue.send(Box::new(MapListPacket::new(local_songs)));
+                        let _ = packet_queue.send(Box::new(MapListPacket::new(local_songs))).await;
                     },
                     MapListPacket::HEADER => {
                         println!("Map List Received");
@@ -266,23 +271,23 @@ impl PacketManager {
 
                         let zipped_maps = zip_local_files(songs_to_zip).unwrap();
                         let zipped_maps = File::from_std(zipped_maps);
-                        let _ = packet_queue.send(Box::new(DownloadResponsePacket::new(zipped_maps).await));
+                        let _ = packet_queue.send(Box::new(DownloadResponsePacket::new(zipped_maps).await)).await;
                     },
                     DownloadResponsePacket::HEADER => {
                         println!("Download Received");
                         // Ask user where to store the files, then read zip file and unzip to folder
                         let file_size = DownloadResponsePacket::deserialize(raw_data).zip_size;
+                        let mut file_data = buf_reader.take(file_size);
 
                         let should_download = ask(Some(&window), "Download Zip",
                             format!("You are about to download a {} MB zip file. Continue?", file_size / 1_000_000));
                         if should_download {
                             let file_path = FileDialogBuilder::new()
                                 .add_filter("Zip file", &["zip"])
-                                .pick_file();
+                                .save_file();
 
                             if let Some(file_path) = file_path {
                                 let mut file = File::create(file_path).await.unwrap();
-                                let mut file_data = buf_reader.take(file_size);
 
                                 // Don't try and read the entire file into memory just in case it's large
                                 // TODO: Emit messages to the front-end regarding progress of download
@@ -291,21 +296,26 @@ impl PacketManager {
                                     let n = file_data.read(&mut buf[..]).await.unwrap();
                                     file.write_all(&buf[..n]).await.unwrap();
                                 }
-
-                                // Once we've done, consume the Take wrapper
-                                buf_reader = file_data.into_inner();
                             }
                         }
+
+                        // Throw away any remaining bytes in our Take wrapper
+                        // This is important if they cancel the operation and we don't save the
+                        // bytes to a file. If we have saved the bytes, then this does nothing.
+                        io::copy(&mut file_data, &mut sink()).await.unwrap();
+
+                        // Once we've done, consume the Take wrapper
+                        buf_reader = file_data.into_inner();
                     },
                     DisconnectPacket::HEADER => {
                         println!("Disconnecting stream");
                         // Send disconnect packet to writing thread to get it to disconnect as well
                         // Getting an error is OK since that means the writing thread has already disconnected
-                        let _ = packet_queue.send(Box::new(DisconnectPacket::new()));
+                        let _ = packet_queue.send(Box::new(DisconnectPacket::new())).await;
                         break;
                     },
                     _ => {
-                        println!("Unexpected header received: {}", packet_header)
+                        println!("Unexpected header received: {:?}", packet_header)
                     }
                 }
             }
@@ -321,6 +331,8 @@ impl PacketManager {
             loop {
                 let mut packet = packet_queue.recv().await.unwrap();
 
+                println!("Writing {} packet...", packet.get_header());
+
                 let mut buf = Vec::new();
                 write!(&mut buf, "{}\n{}\n", packet.get_header(), packet.get_data()).unwrap();
                 buf_writer.write_all(&buf[..]).await.unwrap();
@@ -328,7 +340,6 @@ impl PacketManager {
                 let header = packet.get_header();
                 match header {
                     DownloadResponsePacket::HEADER => {
-                        println!("Download Received");
                         // Write the zip file to the stream
                         let packet = packet.as_any()
                             .downcast_mut::<DownloadResponsePacket>().unwrap();
@@ -345,7 +356,6 @@ impl PacketManager {
                         }
                     },
                     DisconnectPacket::HEADER => {
-                        println!("Disconnect Requested");
                         break;
                     },
                     _ => {
