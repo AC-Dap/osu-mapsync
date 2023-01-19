@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io;
-use std::io::{Read, Seek, Write};
+use std::io::{Cursor, Read, Seek, Write};
 use data_encoding::HEXUPPER;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -126,40 +126,59 @@ pub async fn read_local_files(songs_dir: &Path) -> Result<Vec<SongFolder>, SongF
     Ok(songs)
 }
 
-pub fn zip_local_files(songs_to_zip: Vec<SongFolder>) -> io::Result<File> {
-    let mut zip_file = tempfile()?;
-    let mut zip = zip::ZipWriter::new(zip_file.try_clone()?);
+fn song_to_osz(song: &SongFolder) -> io::Result<Vec<u8>> {
+    let zip_data = Cursor::new(Vec::<u8>::new());
+    let mut zip = zip::ZipWriter::new(zip_data);
     let zip_options = FileOptions::default();
 
+    // Root path of the folder
+    let root = song.path.as_ref().unwrap();
+
+    // Get iterator that goes over all entries in directory
+    let mut files = WalkDir::new(&root)
+        .into_iter().filter_map(|e| e.ok());
+
+    // Skip the first entry since it's the root directory
+    files.next();
+
     let mut buf = Vec::new();
-    for song in songs_to_zip {
-        // Need to remove path prefix when adding to zip
-        let path = song.path.unwrap();
-        let prefix = path.parent().unwrap();
+    for entry in files {
+        let path = entry.path();
+        let name = path.strip_prefix(root).unwrap().to_string_lossy();
 
-        // Get iterator that goes over all entries in directory
-        let files = WalkDir::new(&path)
-            .into_iter().filter_map(|e| e.ok());
-        for entry in files {
-            let path = entry.path();
-            let name = path.strip_prefix(prefix).unwrap()
-                .to_string_lossy();
+        if path.is_file() {
+            println!("Adding file {:?} as {:?}", path, name);
+            zip.start_file(name, zip_options)?;
 
-            if path.is_file() {
-                println!("Adding file {:?} as {:?}", path, name);
-                zip.start_file(name, zip_options)?;
-
-                let mut f = File::open(path)?;
-                f.read_to_end(&mut buf)?;
-                zip.write_all(&buf)?;
-                buf.clear();
-            } else {
-                println!("Adding dir {:?} as {:?}", path, name);
-                zip.add_directory(name, zip_options)?;
-            }
+            let mut f = File::open(path)?;
+            f.read_to_end(&mut buf)?;
+            zip.write_all(&buf)?;
+            buf.clear();
+        } else {
+            println!("Adding dir {:?} as {:?}", path, name);
+            zip.add_directory(name, zip_options)?;
         }
     }
-    zip.finish()?;
+    let zip_data = zip.finish()?;
+
+    Ok(zip_data.into_inner())
+}
+
+pub fn zip_local_files(songs_to_zip: Vec<SongFolder>) -> io::Result<File> {
+    let zip_file = tempfile()?;
+    let mut zip = zip::ZipWriter::new(zip_file);
+    let zip_options = FileOptions::default();
+
+    // Zip each song into .osz format, and then add the zipped song as a file in the zip
+    for song in songs_to_zip {
+        let mut name = song.path.as_ref().unwrap().file_name().unwrap().to_os_string();
+        name.push(".osz");
+        let osz_data = song_to_osz(&song)?;
+
+        zip.start_file(name.to_string_lossy(), zip_options)?;
+        zip.write_all(&osz_data[..])?;
+    }
+    let mut zip_file = zip.finish()?;
 
     // Rewind position in file to beginning to match expected behavior
     zip_file.rewind()?;
