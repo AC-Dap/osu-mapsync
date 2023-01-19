@@ -322,13 +322,23 @@ impl PacketManager {
                             if let Some(file_path) = file_path {
                                 let mut file = File::create(file_path).await.unwrap();
 
+                                window.emit("download-started", {}).unwrap();
+
                                 // Don't try and read the entire file into memory just in case it's large
-                                // TODO: Emit messages to the front-end regarding progress of download
                                 let mut buf = [0; 1024];
+                                let mut progress = 0;
                                 while file_data.limit() > 0 {
                                     let n = file_data.read(&mut buf[..]).await.unwrap();
                                     file.write_all(&buf[..n]).await.unwrap();
+
+                                    let new_progress = 100 - (100 * file_data.limit() / file_size);
+                                    if progress < new_progress {
+                                        progress = new_progress;
+                                        window.emit("download-progress", progress).unwrap();
+                                    }
                                 }
+
+                                window.emit("download-finished", {}).unwrap();
                             }
                         }
 

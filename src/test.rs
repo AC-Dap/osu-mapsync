@@ -71,7 +71,7 @@ async fn test_read_local_files() {
     let songs = get_test_files().await;
     assert!(songs.is_ok(), "Error when trying to read songs: {:?}", songs);
 
-    check_file(songs, expect_file!["./test/testsongs/serialize.txt"])
+    check_file(songs.unwrap(), expect_file!["./test/testsongs/serialize.txt"])
 }
 
 #[tokio::test] #[ignore]
@@ -198,78 +198,9 @@ async fn test_map_list_packet() {
     write_packet(packet, &mut remote_socket).await;
 
     sleep(Duration::from_millis(500)).await;
-    check(
+    check_file(
         remote_songs.lock().unwrap(),
-        expect![[r#"
-            [
-                SongFolder {
-                    id: 1752,
-                    name: "DragonForce - Through The Fire And Flames",
-                    checksum: "F9C1ED218A7E13BD3C55EE65BEE323A5B89F0015E4F0BE9A187602BBD23192DA",
-                    path: None,
-                },
-                SongFolder {
-                    id: 3030,
-                    name: "Lucky Star - Motteke! Sailor Fuku (REDALiCE Remix)",
-                    checksum: "EB28D7411563346E4803E8095A245626DDDB28BAEDAD0C2B519DF114C2A4AA5B",
-                    path: None,
-                },
-                SongFolder {
-                    id: 3756,
-                    name: "Peter Lambert - osu! tutorial",
-                    checksum: "96E110E2307A99D46330607EF5A8ACB51C674773B24EDEE8138273B73CD8F463",
-                    path: None,
-                },
-                SongFolder {
-                    id: 5445,
-                    name: "Hanataba - Night of Knights",
-                    checksum: "45BEA6AC53D0397FABF4C906ED770963DE8BB4B1086C5AAA9E6116B3DC26D7DD",
-                    path: None,
-                },
-                SongFolder {
-                    id: 7380,
-                    name: "Caramell - Caramelldansen (Speedycake Remix)",
-                    checksum: "A7E11AF5A2D094C505E66E8AE9ABEF363F533DE08CBED4B84C3C18DF6251B31D",
-                    path: None,
-                },
-                SongFolder {
-                    id: 8033,
-                    name: "ZUN - Reach for the Moon, Immortal Smoke",
-                    checksum: "8E2A78161FD3DBAD7604D4914C54E03D1C025E235C708CB851EE19C0F82639A5",
-                    path: None,
-                },
-                SongFolder {
-                    id: 8284,
-                    name: "Hatsune Miku - Hatsune Miku no Shoushitsu",
-                    checksum: "FA1AD88FF5AA1FEF27279C5A57695F24A49568040FA211529A5A77CC78B650C1",
-                    path: None,
-                },
-                SongFolder {
-                    id: 8299,
-                    name: "Wiklund - Whip the Blip",
-                    checksum: "18B077618409F9092BF8699CB5AB60F1EDB19B3AA30988222155D11E1658D7AA",
-                    path: None,
-                },
-                SongFolder {
-                    id: 8830,
-                    name: "ZUN - Lunatic Red Eyes _ Invisible Full Moon",
-                    checksum: "5A91938EAA21BA3109FA313CC9F9A80991DCC484369B3236693E6A9F8DAEA3C8",
-                    path: None,
-                },
-                SongFolder {
-                    id: 9040,
-                    name: "Wiklund - Billy Boogie",
-                    checksum: "B92C9596AC28C1DE7A8DEF05C0FB1A5533D2EAE9FB77110051A9A81B0F315425",
-                    path: None,
-                },
-                SongFolder {
-                    id: 9197,
-                    name: "Wiklund - Joy of Living",
-                    checksum: "5BB25EFDAFB5A9D14CDD667E698583830FCDFF495157859527E70DA86291BAD6",
-                    path: None,
-                },
-            ]
-        "#]]
+        expect_file!["./test/testsongs/serialize.txt"]
     );
 
     close_connection(&mut remote_socket).await;
@@ -321,7 +252,7 @@ async fn test_download_request_packet() {
     check(
         response_data,
         expect![[r#"
-            "17795234\n"
+            "17795233\n"
         "#]]
     );
 
@@ -363,6 +294,108 @@ async fn test_download_response_packet() {
         expect![[r#"
             [
                 "ask-dialog: {\"title\":\"Download Zip\",\"message\":\"You are about to download a 14 MB zip file. Continue?\"}",
+                "download-started: null",
+                "download-progress: 1",
+                "download-progress: 2",
+                "download-progress: 3",
+                "download-progress: 4",
+                "download-progress: 5",
+                "download-progress: 6",
+                "download-progress: 7",
+                "download-progress: 8",
+                "download-progress: 9",
+                "download-progress: 10",
+                "download-progress: 11",
+                "download-progress: 12",
+                "download-progress: 13",
+                "download-progress: 14",
+                "download-progress: 15",
+                "download-progress: 16",
+                "download-progress: 17",
+                "download-progress: 18",
+                "download-progress: 19",
+                "download-progress: 20",
+                "download-progress: 21",
+                "download-progress: 22",
+                "download-progress: 23",
+                "download-progress: 24",
+                "download-progress: 25",
+                "download-progress: 26",
+                "download-progress: 27",
+                "download-progress: 28",
+                "download-progress: 29",
+                "download-progress: 30",
+                "download-progress: 31",
+                "download-progress: 32",
+                "download-progress: 33",
+                "download-progress: 34",
+                "download-progress: 35",
+                "download-progress: 36",
+                "download-progress: 37",
+                "download-progress: 38",
+                "download-progress: 39",
+                "download-progress: 40",
+                "download-progress: 41",
+                "download-progress: 42",
+                "download-progress: 43",
+                "download-progress: 44",
+                "download-progress: 45",
+                "download-progress: 46",
+                "download-progress: 47",
+                "download-progress: 48",
+                "download-progress: 49",
+                "download-progress: 50",
+                "download-progress: 51",
+                "download-progress: 52",
+                "download-progress: 53",
+                "download-progress: 54",
+                "download-progress: 55",
+                "download-progress: 56",
+                "download-progress: 57",
+                "download-progress: 58",
+                "download-progress: 59",
+                "download-progress: 60",
+                "download-progress: 61",
+                "download-progress: 62",
+                "download-progress: 63",
+                "download-progress: 64",
+                "download-progress: 65",
+                "download-progress: 66",
+                "download-progress: 67",
+                "download-progress: 68",
+                "download-progress: 69",
+                "download-progress: 70",
+                "download-progress: 71",
+                "download-progress: 72",
+                "download-progress: 73",
+                "download-progress: 74",
+                "download-progress: 75",
+                "download-progress: 76",
+                "download-progress: 77",
+                "download-progress: 78",
+                "download-progress: 79",
+                "download-progress: 80",
+                "download-progress: 81",
+                "download-progress: 82",
+                "download-progress: 83",
+                "download-progress: 84",
+                "download-progress: 85",
+                "download-progress: 86",
+                "download-progress: 87",
+                "download-progress: 88",
+                "download-progress: 89",
+                "download-progress: 90",
+                "download-progress: 91",
+                "download-progress: 92",
+                "download-progress: 93",
+                "download-progress: 94",
+                "download-progress: 95",
+                "download-progress: 96",
+                "download-progress: 97",
+                "download-progress: 98",
+                "download-progress: 99",
+                "download-progress: 100",
+                "download-finished: null",
             ]
         "#]]
     )
