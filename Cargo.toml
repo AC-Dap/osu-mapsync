@@ -23,6 +23,7 @@ walkdir = "2"
 tempfile = "3"
 cfg-if = "1.0.0"
 expect-test = "1.4.0"
+local-ip-address = "0.5.1"
 
 
 [features]

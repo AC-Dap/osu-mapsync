@@ -55,7 +55,13 @@ async fn handle_incoming_connection(listener: &TcpListener, app_window: &Window<
 pub fn start_listening_server(app_window: Window<Wry>, packet_manager: Arc<Mutex<PacketManager>>) {
     tokio::spawn(async move {
         // Start listening on port
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let local_ip = local_ip_address::local_ip();
+        if local_ip.is_err() {
+            println!("Unable to start server... are you connected to the internet?");
+            return
+        }
+        let server_ip = format!("{}:0", local_ip.unwrap());
+        let listener = TcpListener::bind(server_ip).await.unwrap();
         println!("Server started at {:?}", listener.local_addr());
         // TODO: Send this address to front end (maybe by storing in struct -> front-end queries?)
 
