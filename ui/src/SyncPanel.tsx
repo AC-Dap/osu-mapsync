@@ -57,7 +57,7 @@ export default (props: SyncPanelProps) => {
         <button disabled={syncing()} onclick={onSyncPress} class={styles.syncButton}>
             <Show when={syncing()} fallback={"Sync"}>
                 <span style={{width: `${syncPercentage()}%`}}/>
-                Sync ({syncPercentage()}%)
+                <p>Sync ({syncPercentage()}%)</p>
             </Show>
         </button>
     </div>

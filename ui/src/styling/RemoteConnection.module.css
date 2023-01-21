@@ -13,3 +13,7 @@
 .header > input {
     flex: 1;
 }
+
+.subtext {
+    color: slategrey;
+}

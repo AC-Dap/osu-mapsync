@@ -39,6 +39,13 @@
     display: block;
     height: 100%;
     background-color: rgb(43,194,83);
-    position: relative;
+    position: absolute;
     overflow: hidden;
+}
+
+.syncButton > p {
+    position: relative;
+    margin: 0;
+    z-index: 1;
+    color: black;
 }

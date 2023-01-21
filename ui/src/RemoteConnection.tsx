@@ -38,7 +38,9 @@ export default (props: RemoteConnectionProps) => {
         <div class={styles.header}>
             <input type={"text"} placeholder={"Remote server address..."} oninput={(e) => setRemoteAddr(e.currentTarget.value)}/>
             <button onclick={connect}>Connect</button>
+            <button onclick={() => invoke("request_remote_files")}>Refresh</button>
         </div>
+        <p class={styles.subtext}>{props.remoteSongs.length} songs loaded</p>
         <SongList songs={props.remoteSongs}/>
     </div>
 }

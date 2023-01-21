@@ -10,15 +10,15 @@ const App: Component = () => {
     const [localSongs, setLocalSongs] = createSignal<SongFolderWithMatch[]>([]);
     const [remoteSongs, setRemoteSongs] = createSignal<SongFolderWithMatch[]>([]);
     const missingSongs = createMemo(() => (
-        localSongs().filter((song) => song.match === "Similar" || song.match === "Missing")
+        remoteSongs().filter((song) => song.match === "Similar" || song.match === "Missing")
     ));
 
     const updateMatches = function (newLocalSongs: SongFolder[], newRemoteSongs: SongFolder[]) {
         // If one of the sources is empty, we should set our match to "None" rather than "Missing" by default
         let defaultMatch: SongFolderMatch = "Missing";
-        // if (newLocalSongs.length == 0 || newRemoteSongs.length == 0) {
-        //     defaultMatch = "None";
-        // }
+        if (newLocalSongs.length == 0 || newRemoteSongs.length == 0) {
+            defaultMatch = "None";
+        }
 
         // Try and find a match for each song in newLocalSongs
         const newLocalMatches: SongFolderWithMatch[] = newLocalSongs.map((song) => ({song, match: defaultMatch}));
