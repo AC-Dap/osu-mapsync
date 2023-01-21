@@ -1,0 +1,27 @@
+.container {
+    overflow-x: hidden;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.songContainer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.songName {
+    display: inline-block;
+    max-width: 80%;
+    margin-right: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}

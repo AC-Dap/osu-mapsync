@@ -1,0 +1,15 @@
+.container {
+    flex: 1;
+    max-width: 50%;
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    display: flex;
+    padding-right: 10px;
+}
+
+.header > input {
+    flex: 1;
+}

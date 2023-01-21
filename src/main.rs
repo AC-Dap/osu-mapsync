@@ -3,13 +3,14 @@ all(not(debug_assertions), target_os = "windows"),
 windows_subsystem = "windows"
 )]
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use file_manager::SongFolder;
 use tauri::api::dialog::blocking::FileDialogBuilder;
 use tauri::Manager;
 use networking::packets::PacketManager;
+use crate::networking::packets::{DownloadRequestPacket, MapListRequestPacket};
 
 mod networking;
 mod file_manager;
@@ -77,21 +78,25 @@ async fn read_local_files(state: tauri::State<'_, SynchronizerState>) -> Result<
 }
 
 #[tauri::command]
-async fn get_remote_files() -> Result<Vec<SongFolder>, String> {
-    let path = Path::new(r"D:\cuian\Documents\Programming Projects\osu-mapsync\src\test\testsongs");
-    println!("Reading all songs from {:?}", path);
-    let now = Instant::now();
-    let read_songs = file_manager::read_local_files(&path).await;
-    let dur = now.elapsed().as_micros();
-    println!("Took {:?} ms", dur);
-
-    Ok(read_songs.unwrap())
+async fn get_remote_files(state: tauri::State<'_, SynchronizerState>) -> Result<Vec<SongFolder>, ()> {
+    let remote_songs = state.remote_songs.lock().unwrap();
+    Ok(remote_songs.clone())
 }
 
 #[tauri::command]
 async fn connect_to_server(addr: String, state: tauri::State<'_, SynchronizerState>) -> Result<bool, String> {
     networking::connect_to_server(addr, &state.packet_manager).await
         .map_err(|err| { format!("An error occurred: {err:?} ") })
+}
+
+#[tauri::command]
+fn request_remote_files(state: tauri::State<'_, SynchronizerState>) {
+    state.packet_manager.lock().unwrap().send_packet(Box::new(MapListRequestPacket::new()));
+}
+
+#[tauri::command]
+fn request_download(songs_to_request: Vec<SongFolder>, state: tauri::State<'_, SynchronizerState>) {
+    state.packet_manager.lock().unwrap().send_packet(Box::new(DownloadRequestPacket::new(songs_to_request)));
 }
 
 
@@ -101,7 +106,7 @@ async fn main() {
         .manage(SynchronizerState::new())
         .invoke_handler(tauri::generate_handler![
             get_local_path, read_local_files, get_remote_files,
-            connect_to_server
+            connect_to_server, request_remote_files, request_download
         ])
         .setup(|app| {
             let state = app.state::<SynchronizerState>();

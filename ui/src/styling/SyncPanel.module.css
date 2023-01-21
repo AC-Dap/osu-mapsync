@@ -1,0 +1,44 @@
+.container {
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.popupPanel {
+    position: absolute;
+    width: 100%;
+    bottom: 100%;
+    left: 50%;
+    transform: translate(-50%, 0);
+}
+
+.collapseButton {
+    position: absolute;
+    height: 25px;
+    bottom: 100%;
+    left: 50%;
+    transform: translate(-50%, 0);
+}
+
+.songList {
+    width: 100%;
+    max-height: 100px;
+    box-sizing: border-box;
+    background-color: lightgrey;
+    border: 5px solid darkgrey;
+}
+
+.syncButton {
+    width: 100%;
+    position: relative;
+}
+
+/* Progress bar from https://css-tricks.com/css3-progress-bars/ */
+.syncButton > span {
+    display: block;
+    height: 100%;
+    background-color: rgb(43,194,83);
+    position: relative;
+    overflow: hidden;
+}
