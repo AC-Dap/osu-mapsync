@@ -131,6 +131,7 @@ fn song_to_osz(song: &SongFolder) -> io::Result<Vec<u8>> {
 
     // Root path of the folder
     let root = song.path.as_ref().unwrap();
+    println!("Zipping {root:?} to an osz file");
 
     // Get iterator that goes over all entries in directory
     let mut files = WalkDir::new(&root)
@@ -144,13 +145,11 @@ fn song_to_osz(song: &SongFolder) -> io::Result<Vec<u8>> {
         let name = path.strip_prefix(root).unwrap().to_string_lossy();
 
         if path.is_file() {
-            println!("Adding file {:?} as {:?}", path, name);
             zip.start_file(name, zip_options)?;
 
             let f = fs::read(path)?;
             zip.write_all(&f)?;
         } else {
-            println!("Adding dir {:?} as {:?}", path, name);
             zip.add_directory(name, zip_options)?;
         }
     }
@@ -185,9 +184,12 @@ pub async fn zip_local_files(songs_to_zip: Vec<SongFolder>) -> io::Result<File> 
     drop(sender);
 
     // Add each zipped song as a file in the zip
+    let mut processed = 0;
     while let Some((name, song_data)) = receiver.recv().await {
         zip.start_file(name, zip_options)?;
         zip.write_all(&song_data[..])?;
+        processed += 1;
+        println!("Processed {processed} / {} songs", songs_to_zip.len());
     }
 
     // Get back our original file handle

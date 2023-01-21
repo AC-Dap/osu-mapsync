@@ -210,6 +210,9 @@ pub struct PacketManager {
     packet_queue: Option<mpsc::Sender<Box<dyn Packet>>>
 }
 
+// TODO: Better error messages + tests
+//  also add error packet
+
 impl PacketManager {
     pub fn new() -> Self {
         Self { app_state: None, packet_queue: None}
@@ -374,7 +377,8 @@ impl PacketManager {
             loop {
                 let mut packet = packet_queue.recv().await.unwrap();
 
-                println!("Writing {} packet...", packet.get_header());
+                println!("Writing {:?} packet...", packet.get_header());
+                println!("\t{:?}", packet.get_data());
 
                 let mut buf = Vec::new();
                 write!(&mut buf, "{}\n{}\n", packet.get_header(), packet.get_data()).unwrap();

@@ -60,8 +60,8 @@ async fn read_local_files(state: tauri::State<'_, SynchronizerState>) -> Result<
         println!("Reading all songs from {:?}", path);
         let now = Instant::now();
         let read_songs = file_manager::read_local_files(&path).await;
-        let dur = now.elapsed().as_micros();
-        println!("Took {:?} ms", dur);
+        let dur = now.elapsed().as_secs_f64();
+        println!("Took {:?} s", dur);
 
         return match read_songs {
             Ok(songs) => {
