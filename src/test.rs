@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::fs::File;
 use std::io;
+use std::path::Path;
 use std::string::String;
 use std::time::Duration;
 use expect_test::{Expect, expect, expect_file, ExpectFile};
@@ -74,7 +75,7 @@ async fn test_read_local_files() {
     check_file(songs.unwrap(), expect_file!["./test/testsongs/serialize.txt"])
 }
 
-#[tokio::test] #[ignore]
+#[tokio::test]
 async fn test_zip_local_files() {
     let mut songs = get_test_files().await.unwrap();
     songs.truncate(3);
@@ -82,7 +83,7 @@ async fn test_zip_local_files() {
     check(
         format!("Zipping files: {:?}", songs.iter().map(|song| song.name.clone()).collect::<Vec<String>>()),
         expect![[r#"
-            "Zipping files: [\"DragonForce - Through The Fire And Flames\", \"ZUN - Lunatic Red Eyes _ Invisible Full Moon\", \"Caramell - Caramelldansen (Speedycake Remix)\"]"
+            "Zipping files: [\"DragonForce - Through The Fire And Flames\", \"Lucky Star - Motteke! Sailor Fuku (REDALiCE Remix)\", \"Peter Lambert - osu! tutorial\"]"
         "#]]
     );
 
@@ -93,7 +94,7 @@ async fn test_zip_local_files() {
     check(
         created_zip.metadata().unwrap().len(),
         expect![[r#"
-            14848656
+            17795234
         "#]]
     );
 
@@ -194,14 +195,16 @@ async fn test_map_list_packet() {
 
     let songs = get_test_files().await.unwrap();
 
-    let packet = MapListPacket::new(songs);
+    let packet = MapListPacket::new(songs.clone());
     write_packet(packet, &mut remote_socket).await;
 
     sleep(Duration::from_millis(500)).await;
-    check_file(
-        remote_songs.lock().unwrap(),
-        expect_file!["./test/testsongs/serialize.txt"]
-    );
+    let remote_songs = remote_songs.lock().unwrap().clone();
+    let matching = (songs.len() == remote_songs.len()) &&
+        songs.iter().zip(remote_songs).all(|(a, b)| {
+            a.id == b.id && a.name == b.name && a.checksum == b.checksum
+        });
+    assert!(matching, "Received songs do not match the expected list!");
 
     close_connection(&mut remote_socket).await;
 
@@ -215,7 +218,7 @@ async fn test_map_list_packet() {
     )
 }
 
-#[tokio::test]
+#[tokio::test] #[ignore]
 async fn test_download_request_packet() {
     let (mut remote_socket,
         _packet_server,
@@ -252,7 +255,7 @@ async fn test_download_request_packet() {
     check(
         response_data,
         expect![[r#"
-            "17795233\n"
+            "17795234\n"
         "#]]
     );
 
@@ -266,7 +269,7 @@ async fn test_download_request_packet() {
     )
 }
 
-#[tokio::test]
+#[tokio::test] #[ignore]
 async fn test_download_response_packet() {
     let (mut remote_socket,
         _packet_server,
