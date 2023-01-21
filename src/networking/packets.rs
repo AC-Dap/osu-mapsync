@@ -302,7 +302,7 @@ impl PacketManager {
                                 .collect()
                         };
 
-                        let zipped_maps = zip_local_files(songs_to_zip).unwrap();
+                        let zipped_maps = zip_local_files(songs_to_zip).await.unwrap();
                         let zipped_maps = File::from_std(zipped_maps);
                         let _ = packet_queue.send(Box::new(DownloadResponsePacket::new(zipped_maps).await)).await;
                     },

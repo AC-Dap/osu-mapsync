@@ -1,6 +1,6 @@
 use std::fs::File;
-use std::io;
-use std::io::{Cursor, Read, Seek, Write};
+use std::{fs, io};
+use std::io::{BufWriter, Cursor, Seek, Write};
 use data_encoding::HEXUPPER;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -78,10 +78,8 @@ impl SongFolder{
             }
 
             // Read file and update the hasher
-            let mut file = File::open(file.path())?;
-            let mut buffer = Vec::new();
-            file.read_to_end(&mut buffer)?;
-            hasher.update(buffer);
+            let f = fs::read(file.path())?;
+            hasher.update(f);
         }
 
         let digest = hasher.finalize();
@@ -141,7 +139,6 @@ fn song_to_osz(song: &SongFolder) -> io::Result<Vec<u8>> {
     // Skip the first entry since it's the root directory
     files.next();
 
-    let mut buf = Vec::new();
     for entry in files {
         let path = entry.path();
         let name = path.strip_prefix(root).unwrap().to_string_lossy();
@@ -150,10 +147,8 @@ fn song_to_osz(song: &SongFolder) -> io::Result<Vec<u8>> {
             println!("Adding file {:?} as {:?}", path, name);
             zip.start_file(name, zip_options)?;
 
-            let mut f = File::open(path)?;
-            f.read_to_end(&mut buf)?;
-            zip.write_all(&buf)?;
-            buf.clear();
+            let f = fs::read(path)?;
+            zip.write_all(&f)?;
         } else {
             println!("Adding dir {:?} as {:?}", path, name);
             zip.add_directory(name, zip_options)?;
@@ -164,21 +159,39 @@ fn song_to_osz(song: &SongFolder) -> io::Result<Vec<u8>> {
     Ok(zip_data.into_inner())
 }
 
-pub fn zip_local_files(songs_to_zip: Vec<SongFolder>) -> io::Result<File> {
+pub async fn zip_local_files(songs_to_zip: Vec<SongFolder>) -> io::Result<File> {
     let zip_file = tempfile()?;
-    let mut zip = zip::ZipWriter::new(zip_file);
+    let mut zip = zip::ZipWriter::new(BufWriter::new(zip_file));
     let zip_options = FileOptions::default();
 
-    // Zip each song into .osz format, and then add the zipped song as a file in the zip
-    for song in songs_to_zip {
-        let mut name = song.path.as_ref().unwrap().file_name().unwrap().to_os_string();
-        name.push(".osz");
-        let osz_data = song_to_osz(&song)?;
+    // Split work across 4 threads to speed up performance
+    let (sender, mut receiver) = sync::mpsc::channel(24);
+    for chunk in songs_to_zip.chunks(4) {
+        let chunk = chunk.to_owned();
+        let sender = sender.clone();
+        task::spawn_blocking(move || {
+            for song in chunk {
+                // Zip each song into .osz format, and send it through the channel
+                let mut name = song.path.as_ref().unwrap().file_name().unwrap().to_os_string();
+                name.push(".osz");
+                let name = name.to_string_lossy().to_string();
+                let osz_data = song_to_osz(&song).unwrap();
 
-        zip.start_file(name.to_string_lossy(), zip_options)?;
-        zip.write_all(&osz_data[..])?;
+                sender.blocking_send((name, osz_data)).unwrap();
+            }
+        });
     }
-    let mut zip_file = zip.finish()?;
+    // Drop main thread's reference to allow channel to close properly
+    drop(sender);
+
+    // Add each zipped song as a file in the zip
+    while let Some((name, song_data)) = receiver.recv().await {
+        zip.start_file(name, zip_options)?;
+        zip.write_all(&song_data[..])?;
+    }
+
+    // Get back our original file handle
+    let mut zip_file = zip.finish()?.into_inner()?;
 
     // Rewind position in file to beginning to match expected behavior
     zip_file.rewind()?;

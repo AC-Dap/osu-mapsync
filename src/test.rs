@@ -86,7 +86,7 @@ async fn test_zip_local_files() {
         "#]]
     );
 
-    let created_zip = file_manager::zip_local_files(songs);
+    let created_zip = file_manager::zip_local_files(songs).await;
     assert!(created_zip.is_ok(), "Error when trying to zip files: {:?}", created_zip);
     let mut created_zip = created_zip.unwrap();
 
